@@ -1,37 +1,33 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading.Tasks;
 
 namespace FileCrypter
 {
     class Program
     {
-        enum Methods { encrypt, decrypt }
-
-
         static void Main(string[] args)
         {
             if (args.Length >= 2)
             {
-                ConsoleColorHelper.Init();
+                ConsoleManager.Init();
 
                 var path = args[0];
                 var files = new List<string>();
 
-                Methods method = PromptMethod(args[1] == "folder");
+                Security.ProcessTypes method = PromptMethod(args[1] == "folder");
                 var password = PromptPassword(false, method);
                 bool destructFiles = PromptDestruct(args[1] == "folder");
 
 
                 Console.Write("\nTarget:  ");
-                ConsoleColorHelper.WriteLine(path, ConsoleColorHelper.Colors.File);
+                ConsoleManager.WriteLine(path, ConsoleManager.Colors.File);
                 if (args[1] == "folder")
                 {
                     Console.Write("Warning : the folder encryption / decryption is ");
-                    ConsoleColorHelper.WriteLine("RECURSIVE", ConsoleColorHelper.Colors.Important);
+                    ConsoleManager.WriteLine("RECURSIVE", ConsoleManager.Colors.Important);
                 }
-                Console.WriteLine("\nAre you ready to launch the process ? (Press any key... or CTRL + C to quit)");
-                Console.Read();
 
                 if (args[1] == "file")
                 {
@@ -47,43 +43,30 @@ namespace FileCrypter
                     }
                 }
 
-                foreach(var file in files)
+                Console.WriteLine("\nAre you ready to launch the process ? (Press ENTER... or CTRL + C to quit)");
+                Console.ReadLine();
+                Console.Clear();
+                if (files.Count != 1)
+                    Console.WriteLine("Processed files :");
+                else
+                    Console.WriteLine("Progress :");
+
+                Security.totalFiles = files.Count;
+                List<Task> tasks = new List<Task>();
+                foreach (var file in files)
                 {
-                    var fileInfo = new FileInfo(file);
-                    ConsoleColorHelper.Write("\n" + fileInfo.Name, ConsoleColorHelper.Colors.File);
-                    Console.Write("  ->  ");
-
-                    using (var fileStream = new FileStream(fileInfo.FullName, FileMode.Open))
-                    {
-                        try
-                        {
-                            if (method == Methods.encrypt)
-                                Security.Encrypt(fileStream, fileInfo.FullName + ".crypted", password);
-                            else
-                                Security.Decrypt(fileStream, fileInfo.FullName.Substring(0, fileInfo.FullName.LastIndexOf('.')), password);
-                        }
-                        catch (IOException)
-                        {
-                            Console.WriteLine("\nIO error... unlucky");
-                        }
-                        catch (Exception)
-                        {
-                            ConsoleColorHelper.WriteLine("\nSomething went wrong... unlucky", ConsoleColorHelper.Colors.Error);
-                        }
-                    }
-
-                    if (destructFiles)
-                        File.Delete(file);
+                    tasks.Add(Task.Run(() => { Security.ProcessFile(new FileInfo(file), password, method, destructFiles, files.Count == 1); }));
                 }
-                
-                
-                Console.WriteLine("\n----------\nDone !");
+
+                Task.WaitAll(tasks.ToArray());
+
+                Console.WriteLine("\n\n----------\nDone !");
                 Console.ReadLine();
             }
         }
 
 
-        static string PromptPassword(bool reType, Methods method)
+        static string PromptPassword(bool reType, Security.ProcessTypes method)
         {
             var password = "";
             var reTypePassword = "";
@@ -108,22 +91,22 @@ namespace FileCrypter
                     else if (input.Key != ConsoleKey.Enter)
                     {
                         password += input.KeyChar;
-                        ConsoleColorHelper.Write("*", ConsoleColorHelper.Colors.Password);
+                        ConsoleManager.Write("*", ConsoleManager.Colors.Password);
                     }
                 }
 
                 if(password == "")
                 {
-                    ConsoleColorHelper.Write("Please enter a password...", ConsoleColorHelper.Colors.Error);
+                    ConsoleManager.Write("Please enter a password...", ConsoleManager.Colors.Error);
                 }
                 else
                 {
                     if (!reType)
                     {
-                        while (password != reTypePassword && method == Methods.encrypt)
+                        while (password != reTypePassword && method == Security.ProcessTypes.encrypt)
                         {
                             if (password != reTypePassword && reTypePassword != "")
-                                ConsoleColorHelper.Write("\nPassword don't match", ConsoleColorHelper.Colors.Error);
+                                ConsoleManager.Write("\nPassword don't match", ConsoleManager.Colors.Error);
 
                             reTypePassword = PromptPassword(true, method);
                         }
@@ -135,26 +118,26 @@ namespace FileCrypter
         }
 
 
-        static Methods PromptMethod(bool isFolder)
+        static Security.ProcessTypes PromptMethod(bool isFolder)
         {
             Console.Write("Encrypt or decrypt file{0} ? (E / d)  ", isFolder ? "s in this folder" : "");
             var input = Console.ReadLine();
-            var result = input == "d" || input == "D" ? Methods.decrypt : Methods.encrypt;
+            var result = input == "d" || input == "D" ? Security.ProcessTypes.decrypt : Security.ProcessTypes.encrypt;
 
             Console.Write("Chosen method : ");
-            ConsoleColorHelper.WriteLine(result == Methods.encrypt ? "Encrypt" : "Decrypt", ConsoleColorHelper.Colors.Important);
+            ConsoleManager.WriteLine(result == Security.ProcessTypes.encrypt ? "Encrypt" : "Decrypt", ConsoleManager.Colors.Important);
             return result;
         }
 
 
         static bool PromptDestruct(bool isFolder)
         {
-            Console.Write("\n\nDestruct origin processed file{0} ? (y / N)  ", isFolder ? "s" : "");
+            Console.Write("\n\nDestruct original processed file{0} ? (y / N)  ", isFolder ? "s" : "");
             var input = Console.ReadLine();
             var result = input == "y" || input == "Y";
 
-            Console.Write("Origin processed file{0} ", isFolder ? "s" : "");
-            ConsoleColorHelper.Write((result ? "WILL" : "WON'T") + " be destroyed", ConsoleColorHelper.Colors.Important);
+            Console.Write("Original processed file{0} ", isFolder ? "s" : "");
+            ConsoleManager.Write((result ? "WILL" : "WON'T") + " be destroyed", ConsoleManager.Colors.Important);
             Console.WriteLine(" after processing");
 
             return result;
